@@ -1,7 +1,10 @@
 package com.pragma.trazabilidad.mongo;
 
+import com.pragma.trazabilidad.mongo.document.TraceabilityDocument;
 import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
-import org.springframework.data.repository.query.ReactiveQueryByExampleExecutor;
+import reactor.core.publisher.Flux;
 
-public interface MongoDBRepository extends ReactiveMongoRepository<Object/* change for adapter model */, String>, ReactiveQueryByExampleExecutor<Object/* change for adapter model */> {
+public interface MongoDBRepository extends ReactiveMongoRepository<TraceabilityDocument, String> {
+    // Spring Data MongoDB Reactivo genera la query automáticamente
+    Flux<TraceabilityDocument> findByOrderId(String orderId);
 }

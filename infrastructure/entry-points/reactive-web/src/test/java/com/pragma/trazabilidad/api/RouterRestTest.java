@@ -1,60 +1,71 @@
 package com.pragma.trazabilidad.api;
 
-import org.assertj.core.api.Assertions;
+import com.pragma.trazabilidad.model.traceability.Traceability;
+import com.pragma.trazabilidad.usecase.traceability.TraceabilityUseCase;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
+import org.mockito.Mockito;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-@ContextConfiguration(classes = {RouterRest.class, Handler.class})
-@WebFluxTest
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+
 class RouterRestTest {
 
-    @Autowired
     private WebTestClient webTestClient;
+    private TraceabilityUseCase traceabilityUseCase;
 
-    @Test
-    void testListenGETUseCase() {
-        webTestClient.get()
-                .uri("/api/usecase/path")
-                .accept(MediaType.APPLICATION_JSON)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(String.class)
-                .value(userResponse -> {
-                            Assertions.assertThat(userResponse).isEmpty();
-                        }
-                );
+    @BeforeEach
+    void setUp() {
+        traceabilityUseCase = Mockito.mock(TraceabilityUseCase.class);
+        Handler handler = new Handler(traceabilityUseCase);
+        RouterRest routerRest = new RouterRest();
+        webTestClient = WebTestClient.bindToRouterFunction(routerRest.routerFunction(handler)).build();
     }
 
     @Test
-    void testListenGETOtherUseCase() {
-        webTestClient.get()
-                .uri("/api/otherusercase/path")
-                .accept(MediaType.APPLICATION_JSON)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(String.class)
-                .value(userResponse -> {
-                            Assertions.assertThat(userResponse).isEmpty();
-                        }
-                );
-    }
+    void saveLog_ShouldReturnCreated() {
+        Traceability trace = Traceability.builder().id("1").orderId("ord-123").clientId(7L).newState("PENDIENTE").build();
+        when(traceabilityUseCase.saveLog(any(Traceability.class))).thenReturn(Mono.just(trace));
 
-    @Test
-    void testListenPOSTUseCase() {
         webTestClient.post()
-                .uri("/api/usecase/otherpath")
-                .accept(MediaType.APPLICATION_JSON)
-                .bodyValue("")
+                .uri("/api/v1/traceability")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(trace)
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody()
+                .jsonPath("$.orderId").isEqualTo("ord-123");
+    }
+
+    @Test
+    void getTraceability_ShouldReturnOk() {
+        Traceability trace = Traceability.builder().id("1").orderId("ord-123").clientId(7L).newState("PENDIENTE").build();
+        when(traceabilityUseCase.getTraceability(anyString(), anyLong())).thenReturn(Flux.just(trace));
+
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder.path("/api/v1/traceability/ord-123").queryParam("clientId", "7").build())
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(String.class)
-                .value(userResponse -> {
-                            Assertions.assertThat(userResponse).isEmpty();
-                        }
-                );
+                .expectBody()
+                .jsonPath("$[0].orderId").isEqualTo("ord-123");
+    }
+
+    @Test
+    void getTraceability_WhenError_ShouldReturnBadRequest() {
+        when(traceabilityUseCase.getTraceability(anyString(), anyLong()))
+                .thenReturn(Flux.error(new IllegalArgumentException("No se encontraron registros o el pedido no te pertenece.")));
+
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder.path("/api/v1/traceability/ord-123").queryParam("clientId", "7").build())
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.mensaje").isEqualTo("No se encontraron registros o el pedido no te pertenece.");
     }
 }

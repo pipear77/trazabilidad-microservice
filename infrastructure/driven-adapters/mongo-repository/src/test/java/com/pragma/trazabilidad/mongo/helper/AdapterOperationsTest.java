@@ -1,13 +1,13 @@
 package com.pragma.trazabilidad.mongo.helper;
 
+import com.pragma.trazabilidad.model.traceability.Traceability;
 import com.pragma.trazabilidad.mongo.MongoDBRepository;
 import com.pragma.trazabilidad.mongo.MongoRepositoryAdapter;
+import com.pragma.trazabilidad.mongo.document.TraceabilityDocument;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.reactivecommons.utils.ObjectMapper;
-import org.springframework.data.domain.Example;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -20,76 +20,39 @@ class AdapterOperationsTest {
     @Mock
     private MongoDBRepository repository;
 
-    @Mock
-    private ObjectMapper objectMapper;
-
     private MongoRepositoryAdapter adapter;
-
-    private Object entity;
-    private Flux<Object> entities;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-
-        when(objectMapper.map("value", Object.class)).thenReturn("value");
-
-        adapter = new MongoRepositoryAdapter(repository, objectMapper);
-
-        entity = "value";
-        entities = Flux.just(entity);
+        // Instanciamos nuestro adaptador inyectando solo el repositorio mockeado
+        adapter = new MongoRepositoryAdapter(repository);
     }
 
     @Test
-    void testSave() {
-        when(repository.save(entity)).thenReturn(Mono.just("value"));
+    void saveTraceability_Success() {
+        // Arrange
+        Traceability traceability = Traceability.builder().orderId("pedido-123").clientId(7L).build();
+        TraceabilityDocument document = TraceabilityDocument.builder().orderId("pedido-123").clientId(7L).build();
 
-        StepVerifier.create(adapter.save(entity))
-                .expectNext("value")
+        when(repository.save(any(TraceabilityDocument.class))).thenReturn(Mono.just(document));
+
+        // Act & Assert (Modo Reactivo)
+        StepVerifier.create(adapter.saveTraceability(traceability))
+                .expectNextMatches(saved -> saved.getOrderId().equals("pedido-123") && saved.getClientId().equals(7L))
                 .verifyComplete();
     }
 
     @Test
-    void testSaveAll() {
-        when(repository.saveAll(any(Flux.class))).thenReturn(entities);
+    void getTraceabilityByOrderId_Success() {
+        // Arrange
+        TraceabilityDocument document = TraceabilityDocument.builder().orderId("pedido-123").clientId(7L).build();
 
-        StepVerifier.create(adapter.saveAll(entities))
-                .expectNext("value")
-                .verifyComplete();
-    }
+        when(repository.findByOrderId("pedido-123")).thenReturn(Flux.just(document));
 
-    @Test
-    void testFindById() {
-        when(repository.findById("key")).thenReturn(Mono.just(entity));
-
-        StepVerifier.create(adapter.findById("key"))
-                .expectNext("value")
-                .verifyComplete();
-    }
-
-    @Test
-    void testFindByExample() {
-        when(repository.findAll(any(Example.class))).thenReturn(entities);
-
-        StepVerifier.create(adapter.findByExample(entity))
-                .expectNext("value")
-                .verifyComplete();
-    }
-
-    @Test
-    void testFindAll() {
-        when(repository.findAll()).thenReturn(entities);
-
-        StepVerifier.create(adapter.findAll())
-                .expectNext("value")
-                .verifyComplete();
-    }
-
-    @Test
-    void testDeleteById() {
-        when(repository.deleteById("key")).thenReturn(Mono.empty());
-
-        StepVerifier.create(adapter.deleteById("key"))
+        // Act & Assert (Modo Reactivo)
+        StepVerifier.create(adapter.getTraceabilityByOrderId("pedido-123"))
+                .expectNextMatches(found -> found.getOrderId().equals("pedido-123") && found.getClientId().equals(7L))
                 .verifyComplete();
     }
 }
