@@ -1,7 +1,8 @@
-package com.pragma.trazabilidad.mongo;
+package com.pragma.trazabilidad.mongo.adapter;
 
 import com.pragma.trazabilidad.model.traceability.Traceability;
 import com.pragma.trazabilidad.model.traceability.gateways.TraceabilityRepository;
+import com.pragma.trazabilidad.mongo.MongoDBRepository;
 import com.pragma.trazabilidad.mongo.document.TraceabilityDocument;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;

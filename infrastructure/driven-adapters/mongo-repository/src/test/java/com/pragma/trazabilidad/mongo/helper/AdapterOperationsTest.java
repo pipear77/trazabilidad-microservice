@@ -1,16 +1,18 @@
 package com.pragma.trazabilidad.mongo.helper;
 
-import com.pragma.trazabilidad.model.traceability.Traceability;
-import com.pragma.trazabilidad.mongo.MongoDBRepository;
-import com.pragma.trazabilidad.mongo.MongoRepositoryAdapter;
-import com.pragma.trazabilidad.mongo.document.TraceabilityDocument;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.reactivecommons.utils.ObjectMapper;
+import org.springframework.data.domain.Example;
+import org.springframework.data.repository.query.ReactiveQueryByExampleExecutor;
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+
+import java.util.function.Function;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -18,41 +20,108 @@ import static org.mockito.Mockito.when;
 class AdapterOperationsTest {
 
     @Mock
-    private MongoDBRepository repository;
+    private DummyRepository repository;
 
-    private MongoRepositoryAdapter adapter;
+    @Mock
+    private ObjectMapper mapper;
+
+    private DummyAdapter adapter;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        // Instanciamos nuestro adaptador inyectando solo el repositorio mockeado
-        adapter = new MongoRepositoryAdapter(repository);
+        // Instanciamos el adaptador con nuestras clases dummy
+        adapter = new DummyAdapter(repository, mapper, data -> new DummyEntity(data.getId()));
     }
 
     @Test
-    void saveTraceability_Success() {
-        // Arrange
-        Traceability traceability = Traceability.builder().orderId("pedido-123").clientId(7L).build();
-        TraceabilityDocument document = TraceabilityDocument.builder().orderId("pedido-123").clientId(7L).build();
+    void save_Success() {
+        DummyEntity entity = new DummyEntity("1");
+        DummyData data = new DummyData("1");
 
-        when(repository.save(any(TraceabilityDocument.class))).thenReturn(Mono.just(document));
+        when(mapper.map(entity, DummyData.class)).thenReturn(data);
+        when(repository.save(data)).thenReturn(Mono.just(data));
 
-        // Act & Assert (Modo Reactivo)
-        StepVerifier.create(adapter.saveTraceability(traceability))
-                .expectNextMatches(saved -> saved.getOrderId().equals("pedido-123") && saved.getClientId().equals(7L))
+        StepVerifier.create(adapter.save(entity))
+                .expectNextMatches(e -> e.getId().equals("1"))
                 .verifyComplete();
     }
 
     @Test
-    void getTraceabilityByOrderId_Success() {
-        // Arrange
-        TraceabilityDocument document = TraceabilityDocument.builder().orderId("pedido-123").clientId(7L).build();
+    void saveAll_Success() {
+        DummyEntity entity = new DummyEntity("1");
+        DummyData data = new DummyData("1");
 
-        when(repository.findByOrderId("pedido-123")).thenReturn(Flux.just(document));
+        when(mapper.map(entity, DummyData.class)).thenReturn(data);
+        // Usamos cast seguro para simular el Flux
+        when(repository.saveAll((org.reactivestreams.Publisher<DummyData>) any())).thenReturn(Flux.just(data));
 
-        // Act & Assert (Modo Reactivo)
-        StepVerifier.create(adapter.getTraceabilityByOrderId("pedido-123"))
-                .expectNextMatches(found -> found.getOrderId().equals("pedido-123") && found.getClientId().equals(7L))
+        StepVerifier.create(adapter.saveAll(Flux.just(entity)))
+                .expectNextMatches(e -> e.getId().equals("1"))
                 .verifyComplete();
+    }
+
+    @Test
+    void findById_Success() {
+        DummyData data = new DummyData("1");
+        when(repository.findById("1")).thenReturn(Mono.just(data));
+
+        StepVerifier.create(adapter.findById("1"))
+                .expectNextMatches(e -> e.getId().equals("1"))
+                .verifyComplete();
+    }
+
+    @Test
+    void findByExample_Success() {
+        DummyEntity entity = new DummyEntity("1");
+        DummyData data = new DummyData("1");
+
+        when(mapper.map(entity, DummyData.class)).thenReturn(data);
+        when(repository.findAll(any(Example.class))).thenReturn(Flux.just(data));
+
+        StepVerifier.create(adapter.findByExample(entity))
+                .expectNextMatches(e -> e.getId().equals("1"))
+                .verifyComplete();
+    }
+
+    @Test
+    void deleteById_Success() {
+        when(repository.deleteById("1")).thenReturn(Mono.empty());
+
+        StepVerifier.create(adapter.deleteById("1"))
+                .verifyComplete();
+    }
+
+    @Test
+    void findAll_Success() {
+        DummyData data = new DummyData("1");
+        when(repository.findAll()).thenReturn(Flux.just(data));
+
+        StepVerifier.create(adapter.findAll())
+                .expectNextMatches(e -> e.getId().equals("1"))
+                .verifyComplete();
+    }
+
+    // --- CLASES DUMMY INTERNAS PARA SATISFACER LOS GENÉRICOS ---
+
+    static class DummyEntity {
+        private final String id;
+        public DummyEntity(String id) { this.id = id; }
+        public String getId() { return id; }
+    }
+
+    static class DummyData {
+        private final String id;
+        public DummyData(String id) { this.id = id; }
+        public String getId() { return id; }
+    }
+
+    interface DummyRepository extends ReactiveCrudRepository<DummyData, String>, ReactiveQueryByExampleExecutor<DummyData> {
+    }
+
+    static class DummyAdapter extends AdapterOperations<DummyEntity, DummyData, String, DummyRepository> {
+        public DummyAdapter(DummyRepository repository, ObjectMapper mapper, Function<DummyData, DummyEntity> toEntityFn) {
+            super(repository, mapper, toEntityFn);
+        }
     }
 }

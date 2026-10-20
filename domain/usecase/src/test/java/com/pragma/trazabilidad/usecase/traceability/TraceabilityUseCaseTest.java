@@ -11,6 +11,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.time.LocalDateTime;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -56,5 +58,22 @@ class TraceabilityUseCaseTest {
                 .expectErrorMatches(throwable -> throwable instanceof IllegalArgumentException &&
                         throwable.getMessage().equals("No se encontraron registros o el pedido no te pertenece."))
                 .verify();
+    }
+
+    @Test
+    void saveLog_WithExistingTimestamp_Success() {
+        LocalDateTime now = LocalDateTime.now();
+        Traceability log = Traceability.builder()
+                .orderId("ord-2")
+                .clientId(7L)
+                .newState("LISTO")
+                .timestamp(now) // Asignamos fecha para evitar entrar al IF
+                .build();
+
+        when(repository.saveTraceability(any(Traceability.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        StepVerifier.create(useCase.saveLog(log))
+                .expectNextMatches(saved -> saved.getTimestamp().equals(now))
+                .verifyComplete();
     }
 }
